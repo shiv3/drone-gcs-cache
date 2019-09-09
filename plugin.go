@@ -1,6 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"crypto/sha256"
+	"fmt"
+	"golang.org/x/xerrors"
+	"io"
+	"os"
 	pathutil "path"
 	"time"
 
@@ -21,6 +27,9 @@ type Plugin struct {
 	Mount        []string
 
 	Storage storage.Storage
+
+	UseFileHash bool
+	FileHashPath string
 }
 
 const (
@@ -48,6 +57,12 @@ func (p *Plugin) Exec() error {
 	fallbackPath := pathutil.Join(p.FallbackPath, p.Filename)
 
 	if p.Mode == RebuildMode {
+		if p.UseFileHash && p.FileHashPath != ""{
+			if path,err = p.getPathFromHashedFile();err != nil{
+				return  err
+			}
+		}
+
 		log.Infof("Rebuilding cache at %s", path)
 		err = c.Rebuild(p.Mount, path)
 
@@ -57,6 +72,12 @@ func (p *Plugin) Exec() error {
 	}
 
 	if p.Mode == RestoreMode {
+		if p.UseFileHash && p.FileHashPath != ""{
+			if path,err = p.getPathFromHashedFile();err != nil{
+				return  err
+			}
+		}
+
 		log.Infof("Restoring cache at %s", path)
 		err = c.Restore(path, fallbackPath)
 
@@ -78,9 +99,30 @@ func (p *Plugin) Exec() error {
 	return err
 }
 
+func (p *Plugin) getPathFromHashedFile()(string,error){
+	hashed_filename,err := getHashedFile(p.FileHashPath)
+	if err != nil{
+		return "",err
+	}
+	return pathutil.Join(p.Path,hashed_filename),nil
+}
+
 func genIsExpired(age int) cache.DirtyFunc {
 	return func(file storage.FileEntry) bool {
 		// Check if older than "age" days
 		return file.LastModified.Before(time.Now().AddDate(0, 0, age*-1))
 	}
+}
+
+func getHashedFile(filepath string)(string,error){
+	f,err := os.Open(filepath)
+	if err != nil{
+		return "",xerrors.Errorf("file open error: %w",err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _,err := io.Copy(h,f);err != nil{
+		return "",xerrors.Errorf("failed file hash: %w",err)
+	}
+	return fmt.Sprintf("%x",h.Sum(nil)),nil
 }

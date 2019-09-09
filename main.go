@@ -116,6 +116,19 @@ func main() {
 			Usage:  "google service account json key",
 			EnvVar: "PLUGIN_JSON_KEY,GCS_CACHE_JSON_KEY",
 		},
+
+		// Check hashed file information
+		cli.BoolFlag{
+			Name:   "filehash.use",
+			Usage:  "use hashed file check flag",
+			EnvVar: "USE_FILE_HASH",
+		},
+		cli.StringFlag{
+			Name:"filehash.path",
+			Usage:"if use file hash check, set file path like (Gopkg.lock, package-lock.json)",
+			EnvVar:"TO_HASH_FILE_PATH",
+		},
+
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -223,6 +236,9 @@ func run(c *cli.Context) error {
 		filename = "archive.tar"
 	}
 
+	use_filehash := c.GlobalBool("filehash.use")
+	filehash_path := c.GlobalString("filehash.path")
+
 	s, err := gcStorage(c)
 
 	if err != nil {
@@ -244,6 +260,8 @@ func run(c *cli.Context) error {
 		FlushAge:     flushAge,
 		Mount:        mount,
 		Storage:      s,
+		UseFileHash:use_filehash,
+		FileHashPath:filehash_path,
 	}
 
 	return p.Exec()
